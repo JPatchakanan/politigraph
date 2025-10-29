@@ -1,306 +1,183 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>GraphQL to Tableau Connector</title>
-    <meta charset="utf-8">
+    <title>Politigraph GraphQL Connector</title>
     <script src="https://connectors.tableau.com/libs/tableauwdc-2.3.latest.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            max-width: 800px;
-            margin: 40px auto;
-            padding: 20px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .container { max-width: 600px; }
+        button { 
+            padding: 10px 20px; 
+            background: #0070c0; 
+            color: white; 
+            border: none; 
+            cursor: pointer; 
+            margin: 10px 0;
         }
-        .container {
-            background: white;
-            padding: 30px;
-            border-radius: 12px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-        }
-        h1 {
-            color: #333;
-            margin-bottom: 10px;
-        }
-        .subtitle {
-            color: #666;
-            margin-bottom: 30px;
-            font-size: 14px;
-        }
-        label {
-            display: block;
-            margin: 20px 0 8px;
-            font-weight: 600;
-            color: #333;
-        }
-        input, textarea {
-            width: 100%;
-            padding: 12px;
-            border: 2px solid #e0e0e0;
-            border-radius: 6px;
-            font-size: 14px;
-            font-family: 'Courier New', monospace;
-            box-sizing: border-box;
-            transition: border-color 0.3s;
-        }
-        input:focus, textarea:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-        textarea {
-            min-height: 150px;
-            resize: vertical;
-        }
-        button {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            padding: 14px 32px;
-            border-radius: 6px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            margin-top: 20px;
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-        button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
-        }
-        button:active {
-            transform: translateY(0);
-        }
-        .info {
-            background: #f0f4ff;
-            padding: 15px;
-            border-radius: 6px;
-            margin-top: 20px;
-            font-size: 13px;
-            color: #555;
-            border-left: 4px solid #667eea;
-        }
-        .error {
-            background: #fee;
-            padding: 15px;
-            border-radius: 6px;
-            margin-top: 20px;
-            color: #c33;
-            border-left: 4px solid #c33;
-            display: none;
-        }
-        .example {
-            background: #f8f9fa;
-            padding: 10px;
-            border-radius: 4px;
-            font-size: 12px;
-            margin-top: 8px;
+        button:hover { background: #005a9e; }
+        .query-builder { margin: 20px 0; }
+        textarea { 
+            width: 100%; 
+            height: 150px; 
+            margin: 10px 0;
+            font-family: monospace;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🔗 GraphQL to Tableau</h1>
-        <div class="subtitle">Connect your GraphQL API to Tableau dynamically</div>
+        <h1>Politigraph GraphQL Connector</h1>
         
-        <label for="endpoint">GraphQL Endpoint URL</label>
-        <input type="text" id="endpoint" placeholder="https://api.example.com/graphql" />
-        <div class="example">ตัวอย่าง: https://countries.trevorblades.com/</div>
-        
-        <label for="token">Authentication Token (Optional)</label>
-        <input type="text" id="token" placeholder="Bearer token หรือ API key" />
-        
-        <label for="query">GraphQL Query</label>
-        <textarea id="query" placeholder="ใส่ GraphQL query ของคุณที่นี่...">query {
-  countries {
-    code
+        <div class="query-builder">
+            <h3>GraphQL Query</h3>
+            <textarea id="graphqlQuery">
+{
+  politicians {
+    id
     name
-    capital
-    currency
-    phone
-    continent {
-      name
-    }
+    party
+    position
+    province
   }
 }</textarea>
-        
-        <button onclick="connectToTableau()">Connect to Tableau</button>
-        
-        <div id="error" class="error"></div>
-        
-        <div class="info">
-            <strong>💡 วิธีใช้:</strong><br>
-            1. ใส่ GraphQL endpoint URL<br>
-            2. ใส่ token ถ้าจำเป็น (optional)<br>
-            3. เขียน GraphQL query ที่ต้องการ<br>
-            4. คลิก "Connect to Tableau"<br>
-            5. ใน Tableau Desktop เลือก Web Data Connector และใส่ URL ของหน้านี้
+            <button id="submitButton">Get Data</button>
         </div>
+        
+        <div id="status"></div>
     </div>
 
     <script>
-        const myConnector = tableau.makeConnector();
+        (function() {
+    // สร้าง connector
+    var myConnector = tableau.makeConnector();
+
+    // กำหนด schema
+    myConnector.getSchema = function(schemaCallback) {
+        // กำหนดคอลัมน์ข้อมูล - ปรับเปลี่ยนตามข้อมูลจริงจาก API
+        var cols = [
+            {
+                id: "id",
+                alias: "ID",
+                dataType: tableau.dataTypeEnum.string
+            },
+            {
+                id: "name",
+                alias: "ชื่อ",
+                dataType: tableau.dataTypeEnum.string
+            },
+            {
+                id: "party",
+                alias: "พรรค",
+                dataType: tableau.dataTypeEnum.string
+            },
+            {
+                id: "position",
+                alias: "ตำแหน่ง",
+                dataType: tableau.dataTypeEnum.string
+            },
+            {
+                id: "province",
+                alias: "จังหวัด",
+                dataType: tableau.dataTypeEnum.string
+            },
+            {
+                id: "age",
+                alias: "อายุ",
+                dataType: tableau.dataTypeEnum.int
+            },
+            {
+                id: "education",
+                alias: "การศึกษา",
+                dataType: tableau.dataTypeEnum.string
+            }
+        ];
         
-        myConnector.getSchema = function(schemaCallback) {
-            const connectionData = JSON.parse(tableau.connectionData);
-            
-            // ทดสอบ query GraphQL เพื่อดึง schema
-            fetchGraphQLData(connectionData)
-                .then(data => {
-                    const firstKey = Object.keys(data)[0];
-                    const sampleData = data[firstKey];
-                    
-                    if (!Array.isArray(sampleData) || sampleData.length === 0) {
-                        throw new Error('Query ต้อง return array ของข้อมูล');
-                    }
-                    
-                    // สร้าง columns จาก sample data
-                    const cols = generateColumns(sampleData[0], firstKey);
-                    
-                    const tableSchema = {
-                        id: "graphqlData",
-                        alias: "GraphQL Data",
-                        columns: cols
-                    };
-                    
-                    schemaCallback([tableSchema]);
-                })
-                .catch(err => {
-                    tableau.abortWithError("Schema Error: " + err.message);
-                });
+        var tableSchema = {
+            id: "PolitigraphData",
+            alias: "ข้อมูลการเมืองจาก Politigraph",
+            columns: cols
         };
         
-        myConnector.getData = function(table, doneCallback) {
-            const connectionData = JSON.parse(tableau.connectionData);
-            
-            fetchGraphQLData(connectionData)
-                .then(data => {
-                    const firstKey = Object.keys(data)[0];
-                    const rows = data[firstKey];
-                    
-                    // แปลง nested objects เป็น flat structure
-                    const flatRows = rows.map(row => flattenObject(row));
-                    
-                    table.appendRows(flatRows);
-                    doneCallback();
-                })
-                .catch(err => {
-                    tableau.abortWithError("Data Error: " + err.message);
-                });
-        };
+        schemaCallback([tableSchema]);
+    };
+
+    // ฟังก์ชันดึงข้อมูล
+    myConnector.getData = function(table, doneCallback) {
+        var graphqlQuery = document.getElementById('graphqlQuery').value;
         
-        function fetchGraphQLData(config) {
-            const headers = {
-                'Content-Type': 'application/json'
-            };
-            
-            if (config.token) {
-                headers['Authorization'] = `Bearer ${config.token}`;
-            }
-            
-            return fetch(config.endpoint, {
-                method: 'POST',
-                headers: headers,
-                body: JSON.stringify({ query: config.query })
-            })
-            .then(response => response.json())
-            .then(result => {
-                if (result.errors) {
-                    throw new Error(result.errors[0].message);
-                }
-                return result.data;
-            });
-        }
-        
-        function flattenObject(obj, prefix = '') {
-            const flattened = {};
-            
-            for (let key in obj) {
-                const value = obj[key];
-                const newKey = prefix ? `${prefix}_${key}` : key;
+        // ส่ง request ไปยัง GraphQL API
+        $.ajax({
+            url: "https://politigraph.wevis.info/graphql",
+            type: "POST",
+            contentType: "application/json",
+            data: JSON.stringify({
+                query: graphqlQuery
+            }),
+            success: function(response) {
+                console.log("Response received:", response);
                 
-                if (value === null || value === undefined) {
-                    flattened[newKey] = null;
-                } else if (typeof value === 'object' && !Array.isArray(value)) {
-                    Object.assign(flattened, flattenObject(value, newKey));
-                } else if (Array.isArray(value)) {
-                    flattened[newKey] = JSON.stringify(value);
-                } else {
-                    flattened[newKey] = value;
-                }
-            }
-            
-            return flattened;
-        }
-        
-        function generateColumns(sampleRow, prefix = '') {
-            const cols = [];
-            const flatRow = flattenObject(sampleRow);
-            
-            for (let key in flatRow) {
-                const value = flatRow[key];
-                let dataType = tableau.dataTypeEnum.string;
-                
-                if (typeof value === 'number') {
-                    dataType = Number.isInteger(value) ? 
-                        tableau.dataTypeEnum.int : 
-                        tableau.dataTypeEnum.float;
-                } else if (typeof value === 'boolean') {
-                    dataType = tableau.dataTypeEnum.bool;
-                } else if (value instanceof Date) {
-                    dataType = tableau.dataTypeEnum.datetime;
+                if (response.errors) {
+                    tableau.log("GraphQL Errors: " + JSON.stringify(response.errors));
+                    document.getElementById('status').innerHTML = 
+                        '<div style="color: red;">Error: ' + response.errors[0].message + '</div>';
+                    return;
                 }
                 
-                cols.push({
-                    id: key,
-                    alias: key,
-                    dataType: dataType
-                });
+                // แปลงข้อมูลให้เหมาะสมกับ Tableau
+                var tableData = [];
+                
+                // ตรวจสอบและประมวลผลข้อมูลตามโครงสร้าง response
+                if (response.data.politicians) {
+                    response.data.politicians.forEach(function(item) {
+                        tableData.push({
+                            "id": item.id || "",
+                            "name": item.name || "",
+                            "party": item.party || "",
+                            "position": item.position || "",
+                            "province": item.province || "",
+                            "age": item.age || null,
+                            "education": item.education || ""
+                        });
+                    });
+                } else if (response.data.politicalParties) {
+                    response.data.politicalParties.forEach(function(item) {
+                        tableData.push({
+                            "id": item.id || "",
+                            "name": item.name || "",
+                            "party": item.name || "", // ใช้ชื่อพรรคในฟิลด์ party
+                            "position": "พรรค",
+                            "province": item.headquarters || "",
+                            "age": item.foundedYear ? new Date().getFullYear() - item.foundedYear : null,
+                            "education": ""
+                        });
+                    });
+                }
+                
+                table.appendRows(tableData);
+                document.getElementById('status').innerHTML = 
+                    '<div style="color: green;">Success! Loaded ' + tableData.length + ' rows</div>';
+                doneCallback();
+            },
+            error: function(xhr, status, error) {
+                tableau.log("AJAX Error: " + error);
+                document.getElementById('status').innerHTML = 
+                    '<div style="color: red;">Connection Error: ' + error + '</div>';
+                doneCallback();
             }
-            
-            return cols;
-        }
-        
-        function connectToTableau() {
-            const endpoint = document.getElementById('endpoint').value.trim();
-            const token = document.getElementById('token').value.trim();
-            const query = document.getElementById('query').value.trim();
-            const errorDiv = document.getElementById('error');
-            
-            errorDiv.style.display = 'none';
-            
-            if (!endpoint) {
-                errorDiv.textContent = 'กรุณาใส่ GraphQL endpoint URL';
-                errorDiv.style.display = 'block';
-                return;
-            }
-            
-            if (!query) {
-                errorDiv.textContent = 'กรุณาใส่ GraphQL query';
-                errorDiv.style.display = 'block';
-                return;
-            }
-            
-            const connectionData = {
-                endpoint: endpoint,
-                token: token,
-                query: query
-            };
-            
-            tableau.connectionName = "GraphQL Data Source";
-            tableau.connectionData = JSON.stringify(connectionData);
+        });
+    };
+
+    // ลงทะเบียน connector เมื่อหน้าเว็บโหลดเสร็จ
+    $(document).ready(function() {
+        $("#submitButton").click(function() {
+            tableau.connectionName = "Politigraph Data";
             tableau.submit();
-        }
+        });
         
         tableau.registerConnector(myConnector);
-        
-        // Auto-fill ถ้ามี connection data อยู่แล้ว
-        if (tableau.connectionData) {
-            const data = JSON.parse(tableau.connectionData);
-            document.getElementById('endpoint').value = data.endpoint || '';
-            document.getElementById('token').value = data.token || '';
-            document.getElementById('query').value = data.query || '';
-        }
+    });
+})();
     </script>
 </body>
 </html>
