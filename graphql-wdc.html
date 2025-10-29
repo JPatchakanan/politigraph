@@ -1,78 +1,306 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="utf-8">
-  <title>Politigraph GraphQL Connector</title>
-  <script src="https://connectors.tableau.com/libs/tableauwdc-2.3.latest.js"></script>
-  <script>
-    (function() {
-      // 1️⃣ สร้าง Connector
-      var myConnector = tableau.makeConnector();
-
-      // 2️⃣ กำหนดโครงสร้างตาราง (Schema)
-      myConnector.getSchema = function(schemaCallback) {
-        var cols = [
-          { id: "id", dataType: tableau.dataTypeEnum.string },
-          { id: "name", dataType: tableau.dataTypeEnum.string },
-          { id: "party", dataType: tableau.dataTypeEnum.string }
-        ];
-
-        var tableSchema = {
-          id: "politicians",
-          alias: "Politicians from WeVis Politigraph",
-          columns: cols
-        };
-
-        schemaCallback([tableSchema]);
-      };
-
-      // 3️⃣ ดึงข้อมูลจริงจาก GraphQL
-      myConnector.getData = function(table, doneCallback) {
-        var query = `
-          {
-            politicians(first: 100) {
-              edges {
-                node {
-                  id
-                  name
-                  party { name }
-                }
-              }
-            }
-          }
-        `;
-
-        fetch("https://politigraph.wevis.info/graphql", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query: query })
-        })
-        .then(res => res.json())
-        .then(json => {
-          var rows = json.data.politicians.edges.map(p => ({
-            id: p.node.id,
-            name: p.node.name,
-            party: p.node.party ? p.node.party.name : ""
-          }));
-          table.appendRows(rows);
-          doneCallback();
-        })
-        .catch(err => console.error("Error fetching data:", err));
-      };
-
-      tableau.registerConnector(myConnector);
-
-      // 4️⃣ ปุ่มกดเชื่อม
-      window.submitConnector = function() {
-        tableau.connectionName = "Politigraph GraphQL API";
-        tableau.submit();
-      };
-    })();
-  </script>
+    <title>GraphQL to Tableau Connector</title>
+    <meta charset="utf-8">
+    <script src="https://connectors.tableau.com/libs/tableauwdc-2.3.latest.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        label {
+            display: block;
+            margin: 20px 0 8px;
+            font-weight: 600;
+            color: #333;
+        }
+        input, textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 14px;
+            font-family: 'Courier New', monospace;
+            box-sizing: border-box;
+            transition: border-color 0.3s;
+        }
+        input:focus, textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        textarea {
+            min-height: 150px;
+            resize: vertical;
+        }
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 14px 32px;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+        button:active {
+            transform: translateY(0);
+        }
+        .info {
+            background: #f0f4ff;
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 20px;
+            font-size: 13px;
+            color: #555;
+            border-left: 4px solid #667eea;
+        }
+        .error {
+            background: #fee;
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 20px;
+            color: #c33;
+            border-left: 4px solid #c33;
+            display: none;
+        }
+        .example {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            margin-top: 8px;
+        }
+    </style>
 </head>
 <body>
-  <h2>Politigraph GraphQL Connector</h2>
-  <p>Click below to connect Tableau to politigraph.wevis.info GraphQL API.</p>
-  <button onclick="submitConnector()">Connect to Tableau</button>
+    <div class="container">
+        <h1>🔗 GraphQL to Tableau</h1>
+        <div class="subtitle">Connect your GraphQL API to Tableau dynamically</div>
+        
+        <label for="endpoint">GraphQL Endpoint URL</label>
+        <input type="text" id="endpoint" placeholder="https://api.example.com/graphql" />
+        <div class="example">ตัวอย่าง: https://countries.trevorblades.com/</div>
+        
+        <label for="token">Authentication Token (Optional)</label>
+        <input type="text" id="token" placeholder="Bearer token หรือ API key" />
+        
+        <label for="query">GraphQL Query</label>
+        <textarea id="query" placeholder="ใส่ GraphQL query ของคุณที่นี่...">query {
+  countries {
+    code
+    name
+    capital
+    currency
+    phone
+    continent {
+      name
+    }
+  }
+}</textarea>
+        
+        <button onclick="connectToTableau()">Connect to Tableau</button>
+        
+        <div id="error" class="error"></div>
+        
+        <div class="info">
+            <strong>💡 วิธีใช้:</strong><br>
+            1. ใส่ GraphQL endpoint URL<br>
+            2. ใส่ token ถ้าจำเป็น (optional)<br>
+            3. เขียน GraphQL query ที่ต้องการ<br>
+            4. คลิก "Connect to Tableau"<br>
+            5. ใน Tableau Desktop เลือก Web Data Connector และใส่ URL ของหน้านี้
+        </div>
+    </div>
+
+    <script>
+        const myConnector = tableau.makeConnector();
+        
+        myConnector.getSchema = function(schemaCallback) {
+            const connectionData = JSON.parse(tableau.connectionData);
+            
+            // ทดสอบ query GraphQL เพื่อดึง schema
+            fetchGraphQLData(connectionData)
+                .then(data => {
+                    const firstKey = Object.keys(data)[0];
+                    const sampleData = data[firstKey];
+                    
+                    if (!Array.isArray(sampleData) || sampleData.length === 0) {
+                        throw new Error('Query ต้อง return array ของข้อมูล');
+                    }
+                    
+                    // สร้าง columns จาก sample data
+                    const cols = generateColumns(sampleData[0], firstKey);
+                    
+                    const tableSchema = {
+                        id: "graphqlData",
+                        alias: "GraphQL Data",
+                        columns: cols
+                    };
+                    
+                    schemaCallback([tableSchema]);
+                })
+                .catch(err => {
+                    tableau.abortWithError("Schema Error: " + err.message);
+                });
+        };
+        
+        myConnector.getData = function(table, doneCallback) {
+            const connectionData = JSON.parse(tableau.connectionData);
+            
+            fetchGraphQLData(connectionData)
+                .then(data => {
+                    const firstKey = Object.keys(data)[0];
+                    const rows = data[firstKey];
+                    
+                    // แปลง nested objects เป็น flat structure
+                    const flatRows = rows.map(row => flattenObject(row));
+                    
+                    table.appendRows(flatRows);
+                    doneCallback();
+                })
+                .catch(err => {
+                    tableau.abortWithError("Data Error: " + err.message);
+                });
+        };
+        
+        function fetchGraphQLData(config) {
+            const headers = {
+                'Content-Type': 'application/json'
+            };
+            
+            if (config.token) {
+                headers['Authorization'] = `Bearer ${config.token}`;
+            }
+            
+            return fetch(config.endpoint, {
+                method: 'POST',
+                headers: headers,
+                body: JSON.stringify({ query: config.query })
+            })
+            .then(response => response.json())
+            .then(result => {
+                if (result.errors) {
+                    throw new Error(result.errors[0].message);
+                }
+                return result.data;
+            });
+        }
+        
+        function flattenObject(obj, prefix = '') {
+            const flattened = {};
+            
+            for (let key in obj) {
+                const value = obj[key];
+                const newKey = prefix ? `${prefix}_${key}` : key;
+                
+                if (value === null || value === undefined) {
+                    flattened[newKey] = null;
+                } else if (typeof value === 'object' && !Array.isArray(value)) {
+                    Object.assign(flattened, flattenObject(value, newKey));
+                } else if (Array.isArray(value)) {
+                    flattened[newKey] = JSON.stringify(value);
+                } else {
+                    flattened[newKey] = value;
+                }
+            }
+            
+            return flattened;
+        }
+        
+        function generateColumns(sampleRow, prefix = '') {
+            const cols = [];
+            const flatRow = flattenObject(sampleRow);
+            
+            for (let key in flatRow) {
+                const value = flatRow[key];
+                let dataType = tableau.dataTypeEnum.string;
+                
+                if (typeof value === 'number') {
+                    dataType = Number.isInteger(value) ? 
+                        tableau.dataTypeEnum.int : 
+                        tableau.dataTypeEnum.float;
+                } else if (typeof value === 'boolean') {
+                    dataType = tableau.dataTypeEnum.bool;
+                } else if (value instanceof Date) {
+                    dataType = tableau.dataTypeEnum.datetime;
+                }
+                
+                cols.push({
+                    id: key,
+                    alias: key,
+                    dataType: dataType
+                });
+            }
+            
+            return cols;
+        }
+        
+        function connectToTableau() {
+            const endpoint = document.getElementById('endpoint').value.trim();
+            const token = document.getElementById('token').value.trim();
+            const query = document.getElementById('query').value.trim();
+            const errorDiv = document.getElementById('error');
+            
+            errorDiv.style.display = 'none';
+            
+            if (!endpoint) {
+                errorDiv.textContent = 'กรุณาใส่ GraphQL endpoint URL';
+                errorDiv.style.display = 'block';
+                return;
+            }
+            
+            if (!query) {
+                errorDiv.textContent = 'กรุณาใส่ GraphQL query';
+                errorDiv.style.display = 'block';
+                return;
+            }
+            
+            const connectionData = {
+                endpoint: endpoint,
+                token: token,
+                query: query
+            };
+            
+            tableau.connectionName = "GraphQL Data Source";
+            tableau.connectionData = JSON.stringify(connectionData);
+            tableau.submit();
+        }
+        
+        tableau.registerConnector(myConnector);
+        
+        // Auto-fill ถ้ามี connection data อยู่แล้ว
+        if (tableau.connectionData) {
+            const data = JSON.parse(tableau.connectionData);
+            document.getElementById('endpoint').value = data.endpoint || '';
+            document.getElementById('token').value = data.token || '';
+            document.getElementById('query').value = data.query || '';
+        }
+    </script>
 </body>
 </html>
