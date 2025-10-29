@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Politigraph GraphQL Connector</title>
+  <script src="https://connectors.tableau.com/libs/tableauwdc-2.3.latest.js"></script>
+  <script>
+    (function() {
+      // 1️⃣ สร้าง Connector
+      var myConnector = tableau.makeConnector();
+
+      // 2️⃣ กำหนดโครงสร้างตาราง (Schema)
+      myConnector.getSchema = function(schemaCallback) {
+        var cols = [
+          { id: "id", dataType: tableau.dataTypeEnum.string },
+          { id: "name", dataType: tableau.dataTypeEnum.string },
+          { id: "party", dataType: tableau.dataTypeEnum.string }
+        ];
+
+        var tableSchema = {
+          id: "politicians",
+          alias: "Politicians from WeVis Politigraph",
+          columns: cols
+        };
+
+        schemaCallback([tableSchema]);
+      };
+
+      // 3️⃣ ดึงข้อมูลจริงจาก GraphQL
+      myConnector.getData = function(table, doneCallback) {
+        var query = `
+          {
+            politicians(first: 100) {
+              edges {
+                node {
+                  id
+                  name
+                  party { name }
+                }
+              }
+            }
+          }
+        `;
+
+        fetch("https://politigraph.wevis.info/graphql", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query: query })
+        })
+        .then(res => res.json())
+        .then(json => {
+          var rows = json.data.politicians.edges.map(p => ({
+            id: p.node.id,
+            name: p.node.name,
+            party: p.node.party ? p.node.party.name : ""
+          }));
+          table.appendRows(rows);
+          doneCallback();
+        })
+        .catch(err => console.error("Error fetching data:", err));
+      };
+
+      tableau.registerConnector(myConnector);
+
+      // 4️⃣ ปุ่มกดเชื่อม
+      window.submitConnector = function() {
+        tableau.connectionName = "Politigraph GraphQL API";
+        tableau.submit();
+      };
+    })();
+  </script>
+</head>
+<body>
+  <h2>Politigraph GraphQL Connector</h2>
+  <p>Click below to connect Tableau to politigraph.wevis.info GraphQL API.</p>
+  <button onclick="submitConnector()">Connect to Tableau</button>
+</body>
+</html>
