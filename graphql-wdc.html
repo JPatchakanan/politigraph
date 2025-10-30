@@ -1,183 +1,143 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Politigraph GraphQL Connector</title>
+    <meta charset="UTF-8">
+    <title>Politigraph Bills Connector</title>
     <script src="https://connectors.tableau.com/libs/tableauwdc-2.3.latest.js"></script>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <style>
-        body { font-family: Arial, sans-serif; margin: 40px; }
-        .container { max-width: 600px; }
-        button { 
-            padding: 10px 20px; 
-            background: #0070c0; 
-            color: white; 
-            border: none; 
-            cursor: pointer; 
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+            background: #f9f9f9;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            max-width: 600px;
+            margin: auto;
+        }
+        h1 {
+            color: #0070c0;
+        }
+        textarea {
+            width: 100%;
+            height: 120px;
+            font-family: monospace;
             margin: 10px 0;
         }
-        button:hover { background: #005a9e; }
-        .query-builder { margin: 20px 0; }
-        textarea { 
-            width: 100%; 
-            height: 150px; 
-            margin: 10px 0;
-            font-family: monospace;
+        button {
+            padding: 10px 20px;
+            background: #0070c0;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #005a9e;
+        }
+        #status {
+            margin-top: 15px;
+            font-weight: bold;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Politigraph GraphQL Connector</h1>
-        
-        <div class="query-builder">
-            <h3>GraphQL Query</h3>
-            <textarea id="graphqlQuery">
+        <h1>Politigraph Bills Connector</h1>
+        <p>เชื่อมต่อข้อมูลร่างกฎหมาย (Bills) จาก GraphQL API ของ <a href="https://politigraph.wevis.info" target="_blank">Politigraph</a></p>
+
+        <h3>GraphQL Query</h3>
+        <textarea id="graphqlQuery">
 {
-  politicians {
-    id
-    name
-    party
-    position
-    province
+  bills {
+    proposal_date
   }
-}</textarea>
-            <button id="submitButton">Get Data</button>
-        </div>
-        
+}
+        </textarea>
+        <button id="submitButton">Connect to Tableau</button>
+
         <div id="status"></div>
     </div>
 
     <script>
         (function() {
-    // สร้าง connector
-    var myConnector = tableau.makeConnector();
+            // 🔹 สร้าง connector
+            var myConnector = tableau.makeConnector();
 
-    // กำหนด schema
-    myConnector.getSchema = function(schemaCallback) {
-        // กำหนดคอลัมน์ข้อมูล - ปรับเปลี่ยนตามข้อมูลจริงจาก API
-        var cols = [
-            {
-                id: "id",
-                alias: "ID",
-                dataType: tableau.dataTypeEnum.string
-            },
-            {
-                id: "name",
-                alias: "ชื่อ",
-                dataType: tableau.dataTypeEnum.string
-            },
-            {
-                id: "party",
-                alias: "พรรค",
-                dataType: tableau.dataTypeEnum.string
-            },
-            {
-                id: "position",
-                alias: "ตำแหน่ง",
-                dataType: tableau.dataTypeEnum.string
-            },
-            {
-                id: "province",
-                alias: "จังหวัด",
-                dataType: tableau.dataTypeEnum.string
-            },
-            {
-                id: "age",
-                alias: "อายุ",
-                dataType: tableau.dataTypeEnum.int
-            },
-            {
-                id: "education",
-                alias: "การศึกษา",
-                dataType: tableau.dataTypeEnum.string
-            }
-        ];
-        
-        var tableSchema = {
-            id: "PolitigraphData",
-            alias: "ข้อมูลการเมืองจาก Politigraph",
-            columns: cols
-        };
-        
-        schemaCallback([tableSchema]);
-    };
+            // 🔹 กำหนด schema (บอก Tableau ว่าจะมีคอลัมน์อะไร)
+            myConnector.getSchema = function(schemaCallback) {
+                var cols = [
+                    {
+                        id: "proposal_date",
+                        alias: "วันที่เสนอร่างกฎหมาย",
+                        dataType: tableau.dataTypeEnum.date
+                    }
+                ];
 
-    // ฟังก์ชันดึงข้อมูล
-    myConnector.getData = function(table, doneCallback) {
-        var graphqlQuery = document.getElementById('graphqlQuery').value;
-        
-        // ส่ง request ไปยัง GraphQL API
-        $.ajax({
-            url: "https://politigraph.wevis.info/graphql",
-            type: "POST",
-            contentType: "application/json",
-            data: JSON.stringify({
-                query: graphqlQuery
-            }),
-            success: function(response) {
-                console.log("Response received:", response);
-                
-                if (response.errors) {
-                    tableau.log("GraphQL Errors: " + JSON.stringify(response.errors));
-                    document.getElementById('status').innerHTML = 
-                        '<div style="color: red;">Error: ' + response.errors[0].message + '</div>';
-                    return;
-                }
-                
-                // แปลงข้อมูลให้เหมาะสมกับ Tableau
-                var tableData = [];
-                
-                // ตรวจสอบและประมวลผลข้อมูลตามโครงสร้าง response
-                if (response.data.politicians) {
-                    response.data.politicians.forEach(function(item) {
-                        tableData.push({
-                            "id": item.id || "",
-                            "name": item.name || "",
-                            "party": item.party || "",
-                            "position": item.position || "",
-                            "province": item.province || "",
-                            "age": item.age || null,
-                            "education": item.education || ""
-                        });
-                    });
-                } else if (response.data.politicalParties) {
-                    response.data.politicalParties.forEach(function(item) {
-                        tableData.push({
-                            "id": item.id || "",
-                            "name": item.name || "",
-                            "party": item.name || "", // ใช้ชื่อพรรคในฟิลด์ party
-                            "position": "พรรค",
-                            "province": item.headquarters || "",
-                            "age": item.foundedYear ? new Date().getFullYear() - item.foundedYear : null,
-                            "education": ""
-                        });
-                    });
-                }
-                
-                table.appendRows(tableData);
-                document.getElementById('status').innerHTML = 
-                    '<div style="color: green;">Success! Loaded ' + tableData.length + ' rows</div>';
-                doneCallback();
-            },
-            error: function(xhr, status, error) {
-                tableau.log("AJAX Error: " + error);
-                document.getElementById('status').innerHTML = 
-                    '<div style="color: red;">Connection Error: ' + error + '</div>';
-                doneCallback();
-            }
-        });
-    };
+                var tableSchema = {
+                    id: "BillsData",
+                    alias: "ข้อมูลร่างกฎหมายจาก Politigraph",
+                    columns: cols
+                };
 
-    // ลงทะเบียน connector เมื่อหน้าเว็บโหลดเสร็จ
-    $(document).ready(function() {
-        $("#submitButton").click(function() {
-            tableau.connectionName = "Politigraph Data";
-            tableau.submit();
-        });
-        
-        tableau.registerConnector(myConnector);
-    });
-})();
+                schemaCallback([tableSchema]);
+            };
+
+            // 🔹 ดึงข้อมูลจริงจาก GraphQL API
+            myConnector.getData = function(table, doneCallback) {
+                var graphqlQuery = document.getElementById('graphqlQuery').value;
+
+                $.ajax({
+                    url: "https://politigraph.wevis.info/graphql",
+                    type: "POST",
+                    contentType: "application/json",
+                    data: JSON.stringify({ query: graphqlQuery }),
+                    success: function(response) {
+                        console.log("✅ Response received:", response);
+
+                        var tableData = [];
+
+                        // ตรวจสอบว่ามีข้อมูล bills หรือไม่
+                        if (response.data && response.data.bills) {
+                            response.data.bills.forEach(function(item) {
+                                tableData.push({
+                                    "proposal_date": item.proposal_date || null
+                                });
+                            });
+                        } else {
+                            document.getElementById('status').innerHTML =
+                                '<div style="color:red;">No bills data found in response</div>';
+                        }
+
+                        // ส่งข้อมูลกลับให้ Tableau
+                        table.appendRows(tableData);
+                        document.getElementById('status').innerHTML =
+                            '<div style="color:green;">Success! Loaded ' + tableData.length + ' rows</div>';
+                        doneCallback();
+                    },
+                    error: function(xhr, status, error) {
+                        console.error("❌ AJAX Error:", error);
+                        document.getElementById('status').innerHTML =
+                            '<div style="color:red;">Connection Error: ' + error + '</div>';
+                        doneCallback();
+                    }
+                });
+            };
+
+            // 🔹 ลงทะเบียน connector
+            $(document).ready(function() {
+                tableau.registerConnector(myConnector);
+
+                $("#submitButton").click(function() {
+                    tableau.connectionName = "Politigraph Bills Data";
+                    tableau.submit();
+                });
+            });
+        })();
     </script>
 </body>
 </html>
